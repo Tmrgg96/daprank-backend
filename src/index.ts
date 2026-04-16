@@ -339,6 +339,22 @@ app.post("/functions/v1/credits-daily-check", async (req, res) => {
   }
 });
 
+// --------------- Admin: DB dump (protected by DAILY_CHECK_SECRET) ---------------
+app.get("/admin/dump/:table", async (req, res) => {
+  try {
+    if (!DAILY_CHECK_SECRET) { res.status(403).json({ error: "No admin secret" }); return; }
+    const auth = req.headers.authorization || "";
+    if (auth !== `Bearer ${DAILY_CHECK_SECRET}`) { res.status(401).json({ error: "Unauthorized" }); return; }
+    const table = req.params.table.replace(/[^a-z_]/g, "");
+    const allowed = ["users", "user_credits", "prank_templates"];
+    if (!allowed.includes(table)) { res.status(400).json({ error: "Invalid table" }); return; }
+    const { rows } = await pool.query(`SELECT * FROM ${table} ORDER BY created_at`);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // --------------- Start ---------------
 const PORT = parseInt(process.env.PORT || "3000", 10);
 
