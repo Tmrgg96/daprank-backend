@@ -355,6 +355,35 @@ app.get("/admin/dump/:table", async (req, res) => {
   }
 });
 
+// --------------- Admin: Migrate users (one-time) ---------------
+app.post("/admin/migrate-users", async (req, res) => {
+  try {
+    if (!DAILY_CHECK_SECRET) { res.status(403).json({ error: "No admin secret" }); return; }
+    const auth = req.headers.authorization || "";
+    if (auth !== `Bearer ${DAILY_CHECK_SECRET}`) { res.status(401).json({ error: "Unauthorized" }); return; }
+    const users = req.body as any[];
+    if (!Array.isArray(users)) { res.status(400).json({ error: "Expected array" }); return; }
+    let inserted = 0;
+    for (const u of users) {
+      await pool.query("INSERT INTO users (id, created_at) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING", [u.user_id, u.created_at]);
+      await pool.query(
+        `INSERT INTO user_credits (user_id, credits, subscription_status, subscription_type, subscription_expires_at, last_credit_reset, free_generations_used, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         ON CONFLICT (user_id) DO UPDATE SET
+           credits = EXCLUDED.credits, subscription_status = EXCLUDED.subscription_status,
+           subscription_type = EXCLUDED.subscription_type, subscription_expires_at = EXCLUDED.subscription_expires_at,
+           last_credit_reset = EXCLUDED.last_credit_reset, free_generations_used = EXCLUDED.free_generations_used`,
+        [u.user_id, u.credits, u.subscription_status, u.subscription_type, u.subscription_expires_at, u.last_credit_reset, u.free_generations_used, u.created_at, u.updated_at]
+      );
+      inserted++;
+    }
+    res.json({ ok: true, inserted });
+  } catch (err) {
+    console.error("[migrate-users]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // --------------- Start ---------------
 const PORT = parseInt(process.env.PORT || "3000", 10);
 
