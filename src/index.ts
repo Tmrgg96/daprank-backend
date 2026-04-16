@@ -196,7 +196,7 @@ app.post("/functions/v1/sync-subscription", authMiddleware, async (req: AuthRequ
       throw new Error(`RevenueCat API Error: ${rcResponse.status} ${text}`);
     }
 
-    const rcData = await rcResponse.json();
+    const rcData = (await rcResponse.json()) as any;
     const entitlements = rcData.subscriber?.entitlements || {};
 
     let isActive = false;
